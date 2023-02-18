@@ -1,0 +1,7 @@
+- id: gofumpt
+  name: gofumpt
+  description: A stricter gofmt.
+  entry: gofumpt -l -w
+  types: [go]
+  language: golang
+  pass_filenames: true
