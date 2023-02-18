@@ -23,7 +23,10 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strings"
+	"sync"
 
+	// TODO: we can soon use os/exec thanks to
+	// https://go.dev/issue/43724
 	"golang.org/x/sync/semaphore"
 	exec "golang.org/x/sys/execabs"
 
@@ -99,7 +102,7 @@ func usage() {
 }
 
 func initParserMode() {
-	parserMode = parser.ParseComments
+	parserMode = parser.ParseComments | parser.SkipObjectResolution
 	if *allErrors {
 		parserMode |= parser.AllErrors
 	}
@@ -287,21 +290,18 @@ func processFile(filename string, info fs.FileInfo, in io.Reader, r *reporter, e
 	// Apply gofumpt's changes before we print the code in gofumpt's format.
 
 	// If either -lang or -modpath aren't set, fetch them from go.mod.
-	if *langVersion == "" || *modulePath == "" {
-		out, err := exec.Command("go", "mod", "edit", "-json").Output()
-		if err == nil && len(out) > 0 {
-			var mod struct {
-				Go     string
-				Module struct {
-					Path string
-				}
+	lang := *langVersion
+	modpath := *modulePath
+	if lang == "" || modpath == "" {
+		dir := filepath.Dir(filename)
+		mod, ok := moduleCacheByDir.Load(dir)
+		if ok && mod != nil {
+			mod := mod.(*module)
+			if lang == "" {
+				lang = mod.Go
 			}
-			_ = json.Unmarshal(out, &mod)
-			if *langVersion == "" {
-				*langVersion = mod.Go
-			}
-			if *modulePath == "" {
-				*modulePath = mod.Module.Path
+			if modpath == "" {
+				modpath = mod.Module.Path
 			}
 		}
 	}
@@ -311,8 +311,8 @@ func processFile(filename string, info fs.FileInfo, in io.Reader, r *reporter, e
 	// We also skip walking vendor directories entirely, but that happens elsewhere.
 	if explicit || !isGenerated(file) {
 		gformat.File(fileSet, file, gformat.Options{
-			LangVersion: *langVersion,
-			ModulePath:  *modulePath,
+			LangVersion: lang,
+			ModulePath:  modpath,
 			ExtraRules:  *extraRules,
 		})
 	}
@@ -350,12 +350,9 @@ func processFile(filename string, info fs.FileInfo, in io.Reader, r *reporter, e
 			}
 		}
 		if *doDiff {
-			data, err := diffWithReplaceTempFile(src, res, filename)
-			if err != nil {
-				return fmt.Errorf("computing diff: %s", err)
-			}
-			fmt.Fprintf(r, "diff -u %s %s\n", filepath.ToSlash(filename+".orig"), filepath.ToSlash(filename))
-			r.Write(data)
+			newName := filepath.ToSlash(filename)
+			oldName := newName + ".orig"
+			r.Write(diff.Diff(oldName, src, newName, res))
 		}
 	}
 
@@ -414,7 +411,12 @@ func readFile(filename string, info fs.FileInfo, in io.Reader) ([]byte, error) {
 	// stop to avoid corrupting it.)
 	src := make([]byte, size+1)
 	n, err := io.ReadFull(in, src)
-	if err != nil && err != io.ErrUnexpectedEOF {
+	switch err {
+	case nil, io.EOF, io.ErrUnexpectedEOF:
+		// io.ReadFull returns io.EOF (for an empty file) or io.ErrUnexpectedEOF
+		// (for a non-empty file) if the file was changed unexpectedly. Continue
+		// with comparing file sizes in those cases.
+	default:
 		return nil, err
 	}
 	if n < size {
@@ -461,7 +463,7 @@ func gofmtMain(s *sequencer) {
 
 	// Print the gofumpt version if the user asks for it.
 	if *showVersion {
-		version.Print()
+		fmt.Println(version.String())
 		return
 	}
 
@@ -502,9 +504,7 @@ func gofmtMain(s *sequencer) {
 		case !info.IsDir():
 			// Non-directory arguments are always formatted.
 			arg := arg
-			println(arg)
 			s.Add(fileWeight(arg, info), func(r *reporter) error {
-				println(arg)
 				return processFile(arg, info, nil, r, true)
 			})
 		default:
@@ -534,7 +534,47 @@ func gofmtMain(s *sequencer) {
 	}
 }
 
+type module struct {
+	Go     string
+	Module struct {
+		Path string
+	}
+}
+
+func loadModuleInfo(dir string) interface{} {
+	cmd := exec.Command("go", "mod", "edit", "-json")
+	cmd.Dir = dir
+
+	// Spawning "go mod edit" will open files by design,
+	// such as the named pipe to obtain stdout.
+	// TODO(mvdan): if we run into "too many open files" errors again in the
+	// future, we probably need to turn fdSem into a weighted semaphore so this
+	// operation can acquire a weight larger than 1.
+	fdSem <- true
+	out, err := cmd.Output()
+	defer func() { <-fdSem }()
+
+	if err != nil || len(out) == 0 {
+		return nil
+	}
+	mod := new(module)
+	if err := json.Unmarshal(out, mod); err != nil {
+		return nil
+	}
+	return mod
+}
+
+// Written to by fileWeight, read from fileWeight and processFile.
+// A present but nil value means that loading the module info failed.
+// Note that we don't require the keys to be absolute directories,
+// so duplicates are possible. The same can happen with symlinks.
+var moduleCacheByDir sync.Map // map[dirString]*module
+
 func fileWeight(path string, info fs.FileInfo) int64 {
+	dir := filepath.Dir(path)
+	if _, ok := moduleCacheByDir.Load(dir); !ok {
+		moduleCacheByDir.Store(dir, loadModuleInfo(dir))
+	}
 	if info == nil {
 		return exclusive
 	}
@@ -551,43 +591,6 @@ func fileWeight(path string, info fs.FileInfo) int64 {
 		return exclusive
 	}
 	return info.Size()
-}
-
-func diffWithReplaceTempFile(b1, b2 []byte, filename string) ([]byte, error) {
-	data, err := diff.Diff("gofumpt", b1, b2)
-	if len(data) > 0 {
-		return replaceTempFilename(data, filename)
-	}
-	return data, err
-}
-
-// replaceTempFilename replaces temporary filenames in diff with actual one.
-//
-// --- /tmp/gofumpt316145376	2017-02-03 19:13:00.280468375 -0500
-// +++ /tmp/gofumpt617882815	2017-02-03 19:13:00.280468375 -0500
-// ...
-// ->
-// --- path/to/file.go.orig	2017-02-03 19:13:00.280468375 -0500
-// +++ path/to/file.go	2017-02-03 19:13:00.280468375 -0500
-// ...
-func replaceTempFilename(diff []byte, filename string) ([]byte, error) {
-	bs := bytes.SplitN(diff, []byte{'\n'}, 3)
-	if len(bs) < 3 {
-		return nil, fmt.Errorf("got unexpected diff for %s", filename)
-	}
-	// Preserve timestamps.
-	var t0, t1 []byte
-	if i := bytes.LastIndexByte(bs[0], '\t'); i != -1 {
-		t0 = bs[0][i:]
-	}
-	if i := bytes.LastIndexByte(bs[1], '\t'); i != -1 {
-		t1 = bs[1][i:]
-	}
-	// Always print filepath with slash separator.
-	f := filepath.ToSlash(filename)
-	bs[0] = []byte(fmt.Sprintf("--- %s%s", f+".orig", t0))
-	bs[1] = []byte(fmt.Sprintf("+++ %s%s", f, t1))
-	return bytes.Join(bs, []byte{'\n'}), nil
 }
 
 const chmodSupported = runtime.GOOS != "windows"
