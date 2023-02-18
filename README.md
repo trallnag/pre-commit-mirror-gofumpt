@@ -2,7 +2,9 @@
 
 This repository mirrors [mvdan/gofumpt](https://github.com/mvdan/gofumpt)
 releases and adds a pre-commit configuration so that people can use gofumpt
-as a pre-commit hook.
+as a pre-commit hook. Note that the hook configuration uses golang as
+language instead of script or system. This means that pre-commit handles
+installing Go and gofumpt if they are not found.
 
 To use the hook, add the following to your `.pre-commit-config.yaml` file:
 
