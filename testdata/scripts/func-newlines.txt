@@ -249,6 +249,31 @@ func multilineParamsWithoutEmptyLineWithComment(p1 string,
 	// comment
 	println("body")
 }
+
+// Same as the others above, but with a single result parameter without
+// parentheses. This used to cause token.File.Offset crashes.
+func f(p1 string,
+	p2 string) int {
+
+	println("body")
+	return 0
+}
+
+func a() {
+	f := func(s string,
+		b bool,
+	) {
+		// foo
+	}
+}
+
+func f(p1 string,
+	p2 string) (int, string,
+	/* baz */) {
+
+	println("body")
+	return 0, ""
+}
 -- foo.go.golden --
 package p
 
@@ -440,12 +465,39 @@ func multilineResultsMultipleEmptyLines() (p1 string,
 }
 
 func multilineParamsWithoutEmptyLine(p1 string,
-	p2 string) {
+	p2 string,
+) {
 	println("body")
 }
 
 func multilineParamsWithoutEmptyLineWithComment(p1 string,
-	p2 string) {
+	p2 string,
+) {
 	// comment
 	println("body")
+}
+
+// Same as the others above, but with a single result parameter without
+// parentheses. This used to cause token.File.Offset crashes.
+func f(p1 string,
+	p2 string,
+) int {
+	println("body")
+	return 0
+}
+
+func a() {
+	f := func(s string,
+		b bool,
+	) {
+		// foo
+	}
+}
+
+func f(p1 string,
+	p2 string) (int, string,
+
+/* baz */) {
+	println("body")
+	return 0, ""
 }

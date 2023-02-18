@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.0] - 2022-02-22
+
+This is gofumpt's third major release, based on Go 1.18's gofmt.
+The jump from Go 1.17's gofmt should bring a noticeable speed-up,
+as the tool can now format many files concurrently.
+On an 8-core laptop, formatting a large codebase is 4x as fast.
+
+The following [formatting rules](https://github.com/mvdan/gofumpt#Added-rules) are added:
+
+* Functions should separate `) {` where the indentation helps readability
+* Field lists should not have leading or trailing empty lines
+
+The following changes are included as well:
+
+* Generated files are now fully formatted when given as explicit arguments
+* Prepare for Go 1.18's module workspaces, which could cause errors
+* Import paths sharing a prefix with the current module path are no longer
+  grouped with standard library imports
+* `format.Options` gains a `ModulePath` field per the last bullet point
+
+## [0.2.1] - 2021-12-12
+
+This bugfix release resolves a number of issues:
+
+* Add deprecated flags `-s` and `-r` once again, now giving useful errors
+* Avoid a panic with certain function declaration styles
+* Don't group interface members of different kinds
+* Account for leading comments in composite literals
+
 ## [0.2.0] - 2021-11-10
 
 This is gofumpt's second major release, based on Go 1.17's gofmt.
@@ -36,9 +65,7 @@ Finally, the following changes are made to the gofumpt tool:
 This bugfix release backports fixes for a few issues:
 
 * Keep leading empty lines in func bodies if they help readability
-
 * Avoid breaking comment alignment on empty field lists
-
 * Add support for `//go-sumtype:` directives
 
 ## [0.1.0] - 2021-01-05
@@ -62,6 +89,7 @@ those building programs with gofumpt.
 Finally, this release adds the `-version` flag, to print the tool's own version.
 The flag will work for "master" builds too.
 
+[0.2.1]: https://github.com/mvdan/gofumpt/releases/tag/v0.2.1
 [0.2.0]: https://github.com/mvdan/gofumpt/releases/tag/v0.2.0
 [0.1.1]: https://github.com/mvdan/gofumpt/releases/tag/v0.1.1
 [0.1.0]: https://github.com/mvdan/gofumpt/releases/tag/v0.1.0
