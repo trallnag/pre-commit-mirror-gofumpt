@@ -5,6 +5,7 @@ gofumpt -d foo.go.golden
 ! stdout .
 
 -- foo.go --
+//go:build tag
 // +build tag
 
 package p
@@ -14,6 +15,8 @@ package p
 //go:unknowndirective
 
 //lint:disablefoo
+
+//go-sumtype:decl Foo
 
 //nolint
 
@@ -61,6 +64,7 @@ type foo int
 
 //
 -- foo.go.golden --
+//go:build tag
 // +build tag
 
 package p
@@ -70,6 +74,8 @@ package p
 //go:unknowndirective
 
 //lint:disablefoo
+
+//go-sumtype:decl Foo
 
 //nolint
 

@@ -31,6 +31,224 @@ func _() {
 
 	}
 }
+
+func multilineParams(p1 string,
+	p2 string) {
+
+	println("body")
+
+}
+
+func multilineParamsUnambiguous(p1 string,
+	p2 string,
+) {
+
+	println("body")
+
+}
+
+func multilineParamsListNoReturn(
+	p1 string,
+	p2 string,
+) {
+
+	println("body")
+
+}
+
+func multilineParamsListReturningNamedSingleValue(
+	p1 string,
+	p2 string,
+) (err error) {
+
+	println("body")
+	return err
+
+}
+
+func multilineParamsListReturningSingleValue(
+	p1 string,
+	p2 string,
+) error {
+
+	println("body")
+	return nil
+
+}
+
+func multilineParamsListReturningNamedMultiValues(
+	p1 string,
+	p2 string,
+) (s string, err error) {
+
+	println("body")
+	return s, err
+
+}
+
+func multilineParamsListReturningMultiValues(
+	p1 string,
+	p2 string,
+) (string, error) {
+
+	println("body")
+	return "", nil
+
+}
+
+func multilineParamsListReturningNamedMultiLineValuesList(
+	p1 string,
+	p2 string,
+) (
+	s string,
+	err error,
+) {
+
+	println("body")
+	return s, err
+
+}
+
+func multilineParamsListReturningMultiLineValues(
+	p1 string,
+	p2 string,
+) (
+	string,
+	error,
+) {
+
+	println("body")
+	return "", nil
+
+}
+
+func multilineParamsOneParamNoReturn(
+	p1 string,
+) {
+
+	println("body")
+
+}
+
+func multilineParamsOneParamReturningNamedSingleValue(
+	p1 string,
+) (err error) {
+
+	println("body")
+	return err
+
+}
+
+func multilineParamsOneParamReturningSingleValue(
+	p1 string,
+) error {
+
+	println("body")
+	return nil
+
+}
+
+func multilineParamsOneParamReturningNamedMultiValues(
+	p1 string,
+) (s string, err error) {
+
+	println("body")
+	return s, err
+
+}
+
+func multilineParamsOneParamReturningMultiValues(
+	p1 string,
+) (string, error) {
+
+	println("body")
+	return "", nil
+
+}
+
+func multilineParamsOneParamReturningNamedMultiLineValuesList(
+	p1 string,
+) (
+	s string,
+	err error,
+) {
+
+	println("body")
+	return s, err
+
+}
+
+func multilineParamsOneParamReturningMultiLineValues(
+	p1 string,
+) (
+	string,
+	error,
+) {
+
+	println("body")
+	return "", nil
+
+}
+
+func multilineResults() (p1 string,
+	p2 string) {
+
+	println("body")
+
+}
+
+func multilineResultsUnambiguous() (p1 string,
+	p2 string,
+) {
+
+	println("body")
+
+}
+
+func multilineNoFields(
+) {
+
+	println("body")
+
+}
+
+func f(
+	foo int,
+	bar string,
+/* baz */) {
+
+    body()
+}
+
+func f2(
+	foo int,
+	bar string,
+) (
+	string,
+	error,
+	/* baz */) {
+
+	return "", nil
+}
+
+func multilineResultsMultipleEmptyLines() (p1 string,
+	p2 string) {
+
+
+	println("body")
+
+}
+
+func multilineParamsWithoutEmptyLine(p1 string,
+	p2 string) {
+	println("body")
+}
+
+func multilineParamsWithoutEmptyLineWithComment(p1 string,
+	p2 string) {
+	// comment
+	println("body")
+}
 -- foo.go.golden --
 package p
 
@@ -51,4 +269,183 @@ func _() {
 	f3 := func() {
 		println()
 	}
+}
+
+func multilineParams(p1 string,
+	p2 string,
+) {
+	println("body")
+}
+
+func multilineParamsUnambiguous(p1 string,
+	p2 string,
+) {
+	println("body")
+}
+
+func multilineParamsListNoReturn(
+	p1 string,
+	p2 string,
+) {
+	println("body")
+}
+
+func multilineParamsListReturningNamedSingleValue(
+	p1 string,
+	p2 string,
+) (err error) {
+	println("body")
+	return err
+}
+
+func multilineParamsListReturningSingleValue(
+	p1 string,
+	p2 string,
+) error {
+	println("body")
+	return nil
+}
+
+func multilineParamsListReturningNamedMultiValues(
+	p1 string,
+	p2 string,
+) (s string, err error) {
+	println("body")
+	return s, err
+}
+
+func multilineParamsListReturningMultiValues(
+	p1 string,
+	p2 string,
+) (string, error) {
+	println("body")
+	return "", nil
+}
+
+func multilineParamsListReturningNamedMultiLineValuesList(
+	p1 string,
+	p2 string,
+) (
+	s string,
+	err error,
+) {
+	println("body")
+	return s, err
+}
+
+func multilineParamsListReturningMultiLineValues(
+	p1 string,
+	p2 string,
+) (
+	string,
+	error,
+) {
+	println("body")
+	return "", nil
+}
+
+func multilineParamsOneParamNoReturn(
+	p1 string,
+) {
+	println("body")
+}
+
+func multilineParamsOneParamReturningNamedSingleValue(
+	p1 string,
+) (err error) {
+	println("body")
+	return err
+}
+
+func multilineParamsOneParamReturningSingleValue(
+	p1 string,
+) error {
+	println("body")
+	return nil
+}
+
+func multilineParamsOneParamReturningNamedMultiValues(
+	p1 string,
+) (s string, err error) {
+	println("body")
+	return s, err
+}
+
+func multilineParamsOneParamReturningMultiValues(
+	p1 string,
+) (string, error) {
+	println("body")
+	return "", nil
+}
+
+func multilineParamsOneParamReturningNamedMultiLineValuesList(
+	p1 string,
+) (
+	s string,
+	err error,
+) {
+	println("body")
+	return s, err
+}
+
+func multilineParamsOneParamReturningMultiLineValues(
+	p1 string,
+) (
+	string,
+	error,
+) {
+	println("body")
+	return "", nil
+}
+
+func multilineResults() (p1 string,
+	p2 string,
+) {
+	println("body")
+}
+
+func multilineResultsUnambiguous() (p1 string,
+	p2 string,
+) {
+	println("body")
+}
+
+func multilineNoFields() {
+	println("body")
+}
+
+func f(
+	foo int,
+	bar string,
+	/* baz */
+) {
+	body()
+}
+
+func f2(
+	foo int,
+	bar string,
+) (
+	string,
+	error,
+	/* baz */
+) {
+	return "", nil
+}
+
+func multilineResultsMultipleEmptyLines() (p1 string,
+	p2 string,
+) {
+	println("body")
+}
+
+func multilineParamsWithoutEmptyLine(p1 string,
+	p2 string) {
+	println("body")
+}
+
+func multilineParamsWithoutEmptyLineWithComment(p1 string,
+	p2 string) {
+	// comment
+	println("body")
 }

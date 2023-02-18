@@ -14,29 +14,34 @@ import (
 	"go/scanner"
 	"go/token"
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strings"
 
+	exec "golang.org/x/sys/execabs"
+
 	gformat "mvdan.cc/gofumpt/format"
 	"mvdan.cc/gofumpt/internal/diff"
+	"mvdan.cc/gofumpt/internal/version"
 )
 
 var (
 	// main operation modes
-	list        = flag.Bool("l", false, "list files whose formatting differs from gofumpt's")
-	write       = flag.Bool("w", false, "write result to (source) file instead of stdout")
-	rewriteRule = flag.String("r", "", "rewrite rule (e.g., 'a[b:len(a)] -> a[b:]')")
-	simplifyAST = flag.Bool("s", false, "simplify code")
-	doDiff      = flag.Bool("d", false, "display diffs instead of rewriting files")
-	allErrors   = flag.Bool("e", false, "report all errors (not just the first 10 on different lines)")
+	list      = flag.Bool("l", false, "list files whose formatting differs from gofumpt's")
+	write     = flag.Bool("w", false, "write result to (source) file instead of stdout")
+	doDiff    = flag.Bool("d", false, "display diffs instead of rewriting files")
+	allErrors = flag.Bool("e", false, "report all errors (not just the first 10 on different lines)")
 
 	// debugging
 	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to this file")
+
+	// gofumpt's own flags
+	langVersion = flag.String("lang", "", "target Go version in the form 1.X (default from go.mod)")
+	extraRules  = flag.Bool("extra", false, "enable extra rules which should be vetted by a human")
+	showVersion = flag.Bool("version", false, "show version and exit")
 )
 
 // Keep these in sync with go/format/format.go.
@@ -54,8 +59,10 @@ const (
 var (
 	fileSet    = token.NewFileSet() // per process FileSet
 	exitCode   = 0
-	rewrite    func(*ast.File) *ast.File
 	parserMode parser.Mode
+
+	// walkingVendorDir is true if we are explicitly walking a vendor directory.
+	walkingVendorDir bool
 )
 
 func report(err error) {
@@ -75,7 +82,7 @@ func initParserMode() {
 	}
 }
 
-func isGoFile(f os.FileInfo) bool {
+func isGoFile(f fs.DirEntry) bool {
 	// ignore non-Go files
 	name := f.Name()
 	return !f.IsDir() && !strings.HasPrefix(name, ".") && strings.HasSuffix(name, ".go")
@@ -98,7 +105,7 @@ func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error
 		perm = fi.Mode().Perm()
 	}
 
-	src, err := ioutil.ReadAll(in)
+	src, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}
@@ -108,22 +115,10 @@ func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error
 		return err
 	}
 
-	if rewrite != nil {
-		if sourceAdj == nil {
-			file = rewrite(file)
-		} else {
-			fmt.Fprintf(os.Stderr, "warning: rewrite ignored for incomplete programs\n")
-		}
-	}
-
 	ast.SortImports(fileSet, file)
 
-	if *simplifyAST {
-		simplify(file)
-	}
+	// Apply gofumpt's changes before we print the code in gofumpt's format.
 
-	// Apply gofumpt's changes before we print the code in gofumpt's
-	// format.
 	if *langVersion == "" {
 		out, err := exec.Command("go", "list", "-m", "-f", "{{.GoVersion}}").Output()
 		out = bytes.TrimSpace(out)
@@ -131,6 +126,7 @@ func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error
 			*langVersion = string(out)
 		}
 	}
+
 	gformat.File(fileSet, file, gformat.Options{
 		LangVersion: *langVersion,
 		ExtraRules:  *extraRules,
@@ -152,7 +148,7 @@ func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error
 			if err != nil {
 				return err
 			}
-			err = ioutil.WriteFile(filename, res, perm)
+			err = os.WriteFile(filename, res, perm)
 			if err != nil {
 				os.Rename(bakname, filename)
 				return err
@@ -167,7 +163,7 @@ func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error
 			if err != nil {
 				return fmt.Errorf("computing diff: %s", err)
 			}
-			fmt.Printf("diff -u %s %s\n", filepath.ToSlash(filename+".orig"), filepath.ToSlash(filename))
+			fmt.Fprintf(out, "diff -u %s %s\n", filepath.ToSlash(filename+".orig"), filepath.ToSlash(filename))
 			out.Write(data)
 		}
 	}
@@ -179,20 +175,17 @@ func processFile(filename string, in io.Reader, out io.Writer, stdin bool) error
 	return err
 }
 
-func visitFile(path string, f os.FileInfo, err error) error {
-	if err == nil && isGoFile(f) {
-		err = processFile(path, nil, os.Stdout, false)
+func visitFile(path string, f fs.DirEntry, err error) error {
+	if !walkingVendorDir && filepath.Base(path) == "vendor" {
+		return filepath.SkipDir
 	}
-	// Don't complain if a file was deleted in the meantime (i.e.
-	// the directory changed concurrently while running gofumpt).
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil || !isGoFile(f) {
+		return err
+	}
+	if err := processFile(path, nil, os.Stdout, false); err != nil {
 		report(err)
 	}
 	return nil
-}
-
-func walkDir(path string) {
-	filepath.Walk(path, visitFile)
 }
 
 func main() {
@@ -209,7 +202,7 @@ func gofumptMain() {
 
 	// Print the gofumpt version if the user asks for it.
 	if *showVersion {
-		printVersion()
+		version.Print()
 		return
 	}
 
@@ -226,9 +219,9 @@ func gofumptMain() {
 	}
 
 	initParserMode()
-	initRewrite()
 
-	if flag.NArg() == 0 {
+	args := flag.Args()
+	if len(args) == 0 {
 		if *write {
 			fmt.Fprintln(os.Stderr, "error: cannot use -w with standard input")
 			exitCode = 2
@@ -240,15 +233,19 @@ func gofumptMain() {
 		return
 	}
 
-	for i := 0; i < flag.NArg(); i++ {
-		path := flag.Arg(i)
-		switch dir, err := os.Stat(path); {
+	for _, arg := range args {
+		switch info, err := os.Stat(arg); {
 		case err != nil:
 			report(err)
-		case dir.IsDir():
-			walkDir(path)
+		case !info.IsDir():
+			// Non-directory arguments are always formatted.
+			if err := processFile(arg, nil, os.Stdout, false); err != nil {
+				report(err)
+			}
 		default:
-			if err := processFile(path, nil, os.Stdout, false); err != nil {
+			// Directories are walked, ignoring non-Go files.
+			walkingVendorDir = filepath.Base(arg) == "vendor"
+			if err := filepath.WalkDir(arg, visitFile); err != nil {
 				report(err)
 			}
 		}
@@ -297,9 +294,9 @@ const chmodSupported = runtime.GOOS != "windows"
 // backupFile writes data to a new file named filename<number> with permissions perm,
 // with <number randomly chosen such that the file name is unique. backupFile returns
 // the chosen file name.
-func backupFile(filename string, data []byte, perm os.FileMode) (string, error) {
+func backupFile(filename string, data []byte, perm fs.FileMode) (string, error) {
 	// create backup file
-	f, err := ioutil.TempFile(filepath.Dir(filename), filepath.Base(filename))
+	f, err := os.CreateTemp(filepath.Dir(filename), filepath.Base(filename))
 	if err != nil {
 		return "", err
 	}

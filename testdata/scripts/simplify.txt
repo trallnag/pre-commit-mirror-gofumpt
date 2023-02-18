@@ -1,14 +1,42 @@
-# gofumpt changes -s to default to true. Note that goimports, and thus
-# gofumports, has no such flag.
+# gofumpt changes -s to default to true.
 gofumpt foo.go
-[gofumpt] cmp stdout foo.go.golden
-[!gofumpt] cmp stdout foo.go
+cmp stdout foo.go.golden
 
 -- foo.go --
 package p
 
+const ()
+
+const (
+// Comment
+)
+
+type ()
+
+type (
+// Comment
+)
+
+var ()
+
+var (
+// Comment
+)
+
 var _ = [][]int{[]int{1}}
 -- foo.go.golden --
 package p
+
+const (
+// Comment
+)
+
+type (
+// Comment
+)
+
+var (
+// Comment
+)
 
 var _ = [][]int{{1}}
