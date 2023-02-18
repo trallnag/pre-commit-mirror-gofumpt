@@ -12,3 +12,10 @@ rev: v0.4.0
 hooks:
   - id: gofumpt
 ```
+
+How to update this repository once there is a new version of gofumpt?
+
+1. Checkout both repos locally.
+2. Delete everything in this repo except `README.md` and `.pre-commit-hooks.yaml`.
+3. Copy over everything from gofumpt except `README.md` and `.github`.
+4. Commit, tag, and push.
