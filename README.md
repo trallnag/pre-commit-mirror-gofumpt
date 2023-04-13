@@ -21,3 +21,6 @@ How to update this repository once there is a new version of gofumpt?
 2. Delete everything in this repo except `README.md` and `.pre-commit-hooks.yaml`.
 3. Copy over everything from gofumpt except `README.md` and `.github`.
 4. Commit, tag, and push.
+
+Maybe at some point pre-commit-mirror-maker will support Go. Until then this
+workaround is good enough. There is an open issue for this [here](https://github.com/pre-commit/pre-commit-mirror-maker/issues/173).
